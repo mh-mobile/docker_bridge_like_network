@@ -87,14 +87,6 @@ node_configs:
       --dst 192.0.2.2
       --dport 80
       -j SNAT
-      --to-destination 192.0.2.2:80
-  - cmd: >-
-      iptables -t nat
-      -A POSTROUTING
-      -p tcp
-      --dst 192.0.2.2
-      --dport 80
-      -j SNAT
       --to-source 203.0.113.254
 - name: wan
   cmds:
