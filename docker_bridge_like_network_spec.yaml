@@ -1,0 +1,116 @@
+---
+nodes:
+- name: ns1
+  image: netutils
+  interfaces:
+  - { name: ns1-veth0, type: direct, args: router#ns1-br0 }
+- name: ns2
+  image: mynginx
+  interfaces:
+  - { name: ns2-veth0, type: direct, args: router#ns2-br0 }
+- name: ns3
+  image: netutils
+  interfaces:
+  - { name: ns3-veth0, type: direct, args: router#ns3-br0 }
+- name: router
+  image: netutils
+  interfaces:
+  - { name: ns1-br0, type: direct, args: ns1#ns1-veth0 }
+  - { name: ns2-br0, type: direct, args: ns2#ns2-veth0 }
+  - { name: ns3-br0, type: direct, args: ns3#ns3-veth0 }
+  - { name: gw-veth1, type: direct, args: wan#wan-veth0 }
+- name: wan
+  image: netutils
+  interfaces:
+  - { name: wan-veth0, type: direct, args: router#gw-veth1 }
+node_configs:
+- name: ns1
+  cmds:
+  - cmd: ip addr add 192.0.2.1/24 dev ns1-veth0
+  - cmd: ip route add default via 192.0.2.254
+  - cmd: ip link set ns1-veth0 address 00:00:5E:00:53:01
+- name: ns2
+  cmds:
+  - cmd: ip addr add 192.0.2.2/24 dev ns2-veth0
+  - cmd: ip route add default via 192.0.2.254
+  - cmd: ip link set ns2-veth0 address 00:00:5E:00:53:02
+- name: ns3
+  cmds:
+  - cmd: ip addr add 192.0.2.3/24 dev ns3-veth0
+  - cmd: ip route add default via 192.0.2.254
+  - cmd: ip link set ns3-veth0 address 00:00:5E:00:53:03
+- name: router
+  cmds:
+  - cmd: ip link add dev br0 type bridge
+  - cmd: ip link set br0 up
+  - cmd: ip link set ns1-br0 master br0
+  - cmd: ip link set ns2-br0 master br0
+  - cmd: ip link set ns3-br0 master br0
+  - cmd: ip addr add 192.0.2.254/24 dev br0
+  - cmd: ip addr add 203.0.113.254/24 dev gw-veth1
+  - cmd: sysctl net.ipv4.ip_forward=1
+  - cmd: sysctl net.ipv4.conf.all.route_localnet=1
+  - cmd: >-
+      iptables -t nat
+      -A POSTROUTING
+      -s 192.0.2.0/24
+      -o gw-veth1
+      -j MASQUERADE
+  - cmd: >-
+      iptables -t nat
+      -A PREROUTING
+      --dst 203.0.113.254
+      -p tcp
+      --dport 80
+      -j DNAT
+      --to-destination 192.0.2.2:80
+  - cmd: >-
+      iptables -t nat
+      -A OUTPUT
+      --dst 203.0.113.254
+      -p tcp
+      --dport 80
+      -j DNAT
+      --to-destination 192.0.2.2:80
+  - cmd: >-
+      iptables -t nat
+      -A OUTPUT
+      --dst 127.0.0.1
+      -p tcp
+      --dport 80
+      -j DNAT
+      --to-destination 192.0.2.2:80
+  - cmd: >-
+      iptables -t nat
+      -A POSTROUTING
+      -p tcp
+      --dst 192.0.2.2
+      --dport 80
+      -j SNAT
+      --to-destination 192.0.2.2:80
+  - cmd: >-
+      iptables -t nat
+      -A POSTROUTING
+      -p tcp
+      --dst 192.0.2.2
+      --dport 80
+      -j SNAT
+      --to-source 203.0.113.254
+- name: wan
+  cmds:
+  - cmd: ip addr add 203.0.113.1/24 dev wan-veth0
+  - cmd: ip route add default via 203.0.113.254
+test:
+  cmds:
+  - cmd: echo "=========================================="
+  - cmd: echo "Connectivity test from ns1 (192.0.2.1)"
+  - cmd: echo "=========================================="
+  - cmd: docker exec ns1 ping -c 1 203.0.113.1
+  - cmd: echo "=========================================="
+  - cmd: echo "Connectivity test from ns2 (192.0.2.2)"
+  - cmd: echo "=========================================="
+  - cmd: docker exec ns2 ping -c 1 203.0.113.1
+  - cmd: echo "=========================================="
+  - cmd: echo "Connectivity test from ns3 (192.0.2.3)"
+  - cmd: echo "=========================================="
+  - cmd: docker exec ns3 ping -c 1 203.0.113.1
