@@ -1,3 +1,10 @@
+# Dockerfileのビルド
+
+```bash
+$ docker build -f Dockerfile_network -t netutils .
+$ docker build -f Dockerfile_nginx -t mynginx .
+```
+
 # Network Namespace用のスクリプトの使い方
 
 ## Network Namespaceの作成
